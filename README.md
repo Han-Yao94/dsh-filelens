@@ -14,12 +14,16 @@ markers at runtime.
 
 ## Install
 
+`<name>` below is your profile name — the examples use `web`, which is the
+profile the stock deployment boots with (`dsh web`); you may pick any name and
+the first `add` initializes it.
+
 ```sh
-dsh plugin --profile <name> add dsh-filelens          # from npm
+dsh plugin --profile web add dsh-filelens               # from npm
 # or straight from a git host:
-dsh plugin --profile <name> add github:Han-Yao94/dsh-filelens
+dsh plugin --profile web add github:Han-Yao94/dsh-filelens
 # or from a local tarball:
-dsh plugin --profile <name> add ./dsh-filelens-1.0.0.tgz
+dsh plugin --profile web add ./dsh-filelens-1.0.0.tgz
 ```
 
 > **Git installs and build scripts**: the package ships a `prepare` script that
@@ -42,11 +46,11 @@ If the profile does not exist yet, the first `add` initializes it with
 `@deepseek-ai/dsh-base`; the web GUI additionally needs `dsh-web-app`:
 
 ```sh
-dsh plugin --profile <name> add @deepseek-ai/dsh-web-app
+dsh plugin --profile web add @deepseek-ai/dsh-web-app
 ```
 
-Then boot with `dsh --profile <name>` and toggle the file explorer from the
-conversation header (folder icon) or the details column.
+Then boot with `dsh --profile web` (or `dsh web`) and toggle the file explorer
+from the conversation header (folder icon) or the details column.
 
 ## Features
 

@@ -8,12 +8,14 @@
 
 ## 安装
 
+下面的 `<name>` 是 profile（配置档）的名字——示例统一使用 `web`（即默认部署启动所用的 profile，`dsh web` 就是它的别名）；你可以随意取名，首次 `add` 会自动初始化该 profile。
+
 ```sh
-dsh plugin --profile <name> add dsh-filelens          # 从 npm
+dsh plugin --profile web add dsh-filelens          # 从 npm
 # 或直接从 git 仓库安装：
-dsh plugin --profile <name> add github:Han-Yao94/dsh-filelens
+dsh plugin --profile web add github:Han-Yao94/dsh-filelens
 # 或从本地 tarball 安装：
-dsh plugin --profile <name> add ./dsh-filelens-1.0.0.tgz
+dsh plugin --profile web add ./dsh-filelens-1.0.0.tgz
 ```
 
 > **git 安装与构建脚本**：本包自带 `prepare` 脚本从源码构建 `lib/`，同时 `lib/` 构建产物也已提交入库，因此两种方式都可直接使用。pnpm ≥10 默认拒绝运行 git 依赖的 `prepare` 脚本，直到显式放行——如果首次 `add` 失败，请把 pnpm 打印的精确包键复制到 profile 的 `pnpm-workspace.yaml` 中再重试：
@@ -28,10 +30,10 @@ dsh plugin --profile <name> add ./dsh-filelens-1.0.0.tgz
 如果 profile 尚不存在，首次 `add` 会用 `@deepseek-ai/dsh-base` 初始化；Web GUI 还需要 `dsh-web-app`：
 
 ```sh
-dsh plugin --profile <name> add @deepseek-ai/dsh-web-app
+dsh plugin --profile web add @deepseek-ai/dsh-web-app
 ```
 
-然后用 `dsh --profile <name>` 启动，从对话头部（文件夹图标）或 details 列打开文件浏览器。
+然后用 `dsh --profile web`（或 `dsh web`）启动，从对话头部（文件夹图标）或 details 列打开文件浏览器。
 
 ## 功能
 
