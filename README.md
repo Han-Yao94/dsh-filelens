@@ -1,5 +1,7 @@
 # dsh-filelens
 
+English | [中文](README.zh.md)
+
 **FileLens** — a right-column file explorer for the DeepSeek Harness web UI.
 Browse a lazy directory tree, preview many formats, search names & file
 contents, open multiple tabs, and inline-edit text files — with containment
