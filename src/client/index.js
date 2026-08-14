@@ -84,7 +84,7 @@ export async function apply(ctx) {
       },
     }
 
-    const store = { open: false, listeners: new Set(), pendingFile: null, fileListeners: new Set(), keyListeners: new Set() }
+    const store = { open: false, listeners: new Set(), pendingFile: null, pendingDir: null, tick: 0, fileListeners: new Set(), keyListeners: new Set() }
     const setOpen = (v) => {
       store.open = v
       store.listeners.forEach((fn) => fn())
@@ -114,10 +114,15 @@ export async function apply(ctx) {
     // ---- conversation file links (code button[title]) open in FileLens ----
     const looksLikePath = (s) => /^[A-Za-z]:[\\/]/.test(s) || /^\\\\/.test(s) || /^\/[^/]/.test(s)
     const requestOpenFile = (path) => {
+      // Show the file's OWN folder in the tree instead of opening a preview
+      // tab: the panel switches its root to the parent directory and the
+      // clicked file is highlighted as a row.
+      store.pendingDir = parentOf(path)
       store.pendingFile = path
+      store.tick = (store.tick || 0) + 1
       setOpen(true)
       if (layout) layout.openDetails()
-      store.fileListeners.forEach((fn) => fn(path))
+      store.fileListeners.forEach((fn) => fn())
     }
     ctx.effect(() => {
       if (typeof document === 'undefined' || !document.addEventListener) return
@@ -1260,15 +1265,27 @@ export async function apply(ctx) {
         }, [palette ? palette.q : null, root])
 
         React.useEffect(() => {
-          if (root && store.pendingFile) {
-            const p = store.pendingFile
-            store.pendingFile = null
-            openFile(p, basenameOf(p), true)
+          // consume a conversation-link click: switch the tree to the file's
+          // own folder and highlight the file row
+          const consume = () => {
+            if (store.pendingDir) {
+              const d = store.pendingDir
+              store.pendingDir = null
+              setRoot(d)
+              setRootState('ready')
+              setSeq((s) => s + 1)
+            }
+            if (store.pendingFile) {
+              const p = store.pendingFile
+              store.pendingFile = null
+              setCursorPath(p)
+            }
           }
-          const fn = (path) => openFile(path, basenameOf(path), true)
+          consume()
+          const fn = () => consume()
           store.fileListeners.add(fn)
           return () => { store.fileListeners.delete(fn) }
-        }, [root])
+        }, [])
 
         // find: compute matches
         React.useEffect(() => {
