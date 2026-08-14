@@ -103,7 +103,6 @@ export async function apply(ctx) {
     // ---- shared constants (mirror the caps in host.js) ----
     const LINE_H = 19
     const VIRTUAL_THRESHOLD = 800
-    const TREE_SLICE = 300
     const TABLE_SLICE = 1000
     const PREVIEW_KB = 256
 
@@ -1602,9 +1601,8 @@ export async function apply(ctx) {
           const info = dirs[path]
           const rows = []
           if (info && info.state === 'ready') {
-            const list = filtered(info.entries).slice(0, TREE_SLICE)
-            const extra = info.entries.length - list.length
-            list.forEach((e) => {
+            // show every entry — no per-directory cap
+            filtered(info.entries).forEach((e) => {
               const isDir = e.type === 'directory'
               const eOpen = isDir && !!expanded[e.path]
               rows.push(React.createElement(
@@ -1626,13 +1624,6 @@ export async function apply(ctx) {
               ))
               if (isDir && eOpen) rows.push(...renderRows(e.path, depth + 1))
             })
-            if (extra > 0) {
-              rows.push(React.createElement(
-                'div',
-                { key: '__more', className: 'fex-note', style: { paddingLeft: 8 + depth * 16 } },
-                '… 还有 ' + extra + ' 项未显示',
-              ))
-            }
           } else if (info && info.state === 'loading') {
             rows.push(React.createElement(
               'div',
