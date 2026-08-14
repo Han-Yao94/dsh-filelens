@@ -1078,7 +1078,6 @@ export async function apply(ctx) {
         const [imgSize, setImgSize] = React.useState(null)
         const [jumpTick, setJumpTick] = React.useState(0)
         const [restored, setRestored] = React.useState(false)
-        const [pendingRestore, setPendingRestore] = React.useState(null)
         const [seq, setSeq] = React.useState(0)
         const [notice, setNotice] = React.useState(null)
         const noticeTimer = React.useRef(null)
@@ -1145,23 +1144,11 @@ export async function apply(ctx) {
             if (raw) data = JSON.parse(raw)
           } catch (err) { data = null }
           if (!data) return
-          if (data.root && data.root !== root) {
-            setPendingRestore(data)
-            setRoot(data.root)
-            setSeq((s) => s + 1)
-          } else {
-            applyRestore(data)
-          }
+          // The panel always opens on the CURRENT workspace root reported by
+          // file.root; a stored root from a previous session must not hijack
+          // it. Only expanded dirs and tabs are restored.
+          applyRestore(data)
         }, [rootState, root])
-
-        React.useEffect(() => {
-          if (!pendingRestore) return
-          const d = pendingRestore
-          if (d.root && dirs[d.root]) {
-            setPendingRestore(null)
-            applyRestore(d)
-          }
-        }, [pendingRestore, dirs, root])
 
         // state persistence (debounced)
         React.useEffect(() => {
