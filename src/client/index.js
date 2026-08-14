@@ -1,47 +1,50 @@
 // GENERATED from ../client.js by scripts/make-client.mjs — edit the source
 // file, then re-run `node scripts/make-client.mjs`. Static client half: the
-// FileLens UI in the details column, reaching the host through the Typert
-// Remote gateway instead of the dynamic-plugin host.call bridge.
+// FileLens UI in the details column, reaching the host over the /api Remote
+// transport (the same wire the client-connection package uses). The host
+// endpoint is registered by the FileLens service at construction, so no
+// ctx.remote namespace injection is needed — the cordis inject guard and the
+// mount-order deadlock cannot interfere.
 
 import React from 'react'
-import { z } from 'zod'
 
-export const inject = ['remote']
-
-const Z_ANY = z.any()
-const METHOD_NAMES = ['root', 'list', 'search', 'grep', 'read', 'readMore', 'readHex', 'write', 'readImage']
-const DESCRIPTORS = METHOD_NAMES.map((method) => ({
-  id: 'dsh-filelens#filelens/' + method,
-  service: 'filelens',
-  namespace: 'filelens',
-  method,
-  invocation: { kind: 'direct' },
-  parameters: [{ name: 'args', wire: 'args', source: 'json', codec: { mode: 'strict', typeSymbol: 'any', schema: Z_ANY } }],
-  result: { mode: 'strict', typeSymbol: 'any', schema: Z_ANY },
-}))
-
-let remoteApi = null
-async function mountRemote(ctx) {
-  const remote = ctx.get('remote')
-  if (remote === undefined) return
-  await remote.$mount({ package: 'dsh-filelens', descriptors: DESCRIPTORS })
-  remoteApi = remote
-}
-
-// Replaces callRemote(...) from the dynamic-plugin edition: routes through the
-// mounted Remote namespace and unwraps the RemoteResult envelope. The host
-// method always takes one plain-object `args` argument (SRC wire field).
+// Replaces callRemote(...) from the dynamic-plugin edition: POSTs a
+// client-request envelope to the /api bridge (identical shape to the
+// client-connection rpc.call) and unwraps the server response. The host
+// method always takes one plain-object `args` argument.
 async function callRemote(method, args) {
-  const api = remoteApi
-  if (!api) throw new Error('filelens remote not mounted')
-  const name = method.slice(5)
-  const res = await api.filelens[name](args)
-  if (!res || res.ok !== true) {
-    const err = new Error((res && res.error && res.error.message) || ('remote ' + method + ' failed'))
-    err.kind = res && res.error && res.error.code
+  const endpoint = method.slice(5)
+  const rpcId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'id-' + Math.random().toString(36).slice(2)
+  let res
+  try {
+    res = await fetch('/api/filelens/' + endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'client-request',
+        rpcId,
+        method: 'filelens/' + endpoint,
+        payload: { args: { args } },
+      }),
+    })
+  } catch (err) {
+    const e = new Error('filelens transport failure: ' + ((err && err.message) || String(err)))
+    e.kind = 'transport'
+    throw e
+  }
+  if (!res.ok) throw new Error('filelens transport failure: HTTP ' + res.status)
+  let full
+  try { full = await res.json() } catch (err) { throw new Error('filelens transport failure: bad response') }
+  if (full.rpcId !== rpcId) throw new Error('filelens transport failure: rpcId mismatch')
+  const result = full.result
+  if (!result || result.ok !== true) {
+    const err = new Error((result && result.error && result.error.message) || ('remote ' + method + ' failed'))
+    err.kind = result && result.error && result.error.code
     throw err
   }
-  return res.value
+  return result.value
 }
 
 // FileLens — DeepSeek Harness dynamic Cordis plugin
@@ -63,7 +66,6 @@ export async function apply(ctx) {
     const workspaces = ctx.get('workspaces')
     const timer = ctx.get('timer')
     if (slots === undefined) return
-    await mountRemote(ctx)
 
     // styles.insert may be absent in a static client runtime; fall back to a
     // plain style tag so the panel always gets its CSS.
