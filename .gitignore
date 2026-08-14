@@ -1,0 +1,9 @@
+# dependencies
+node_modules/
+
+# local tarballs
+*.tgz
+
+# build artifacts (lib/ is committed so installs work without a build step;
+# the sourcemap is only for browser debugging and is not published either)
+lib/client.js.map

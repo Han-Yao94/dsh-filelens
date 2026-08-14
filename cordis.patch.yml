@@ -1,0 +1,8 @@
+# FileLens bundle layer: mounts the FileLens host service and its browser UI.
+# A single package provides both halves:
+#   - the node half (main = lib/index.js) registers the `filelens` Remote service
+#   - the browser half (exports["./client"]) registers the details-column UI;
+#     client-modules picks it up from the `dsh.client` declaration in package.json
+- insert:
+    - id: filelens
+      name: dsh-filelens
