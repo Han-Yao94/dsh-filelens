@@ -1,8 +1,9 @@
 // FileLens — DeepSeek Harness bundle plugin (host half)
 //
 // A static Cordis plugin registered as the `filelens` Service. The browser half
-// reaches it through the Typert Remote gateway (SRC mode: no generated
-// artifacts needed — the gateway reflects the @Remote markers at runtime).
+// reaches it through the Typert Remote gateway. Invocation definitions are
+// registered at runtime into the Host Typert registry (typert.local) — no
+// generated artifacts and no decorator markers required.
 //
 // Remote methods (wire = single `args` object per method):
 //   root / list / search / grep / read / readMore / readHex / write / readImage
@@ -15,7 +16,7 @@
 //   - readMore continues a cached stream instead of re-reading from the start.
 
 import type { Context } from '@deepseek-ai/cordis'
-import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { TypertRemoteService, type InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 
 // ---- minimal structural types for the host `fs` service (runtime duck-typed) ----
 interface FsTarget {
@@ -88,7 +89,7 @@ const MIME: Record<string, string> = {
 }
 
 export class FileLensService extends TypertRemoteService {
-  static inject = ['fs']
+  static inject = ['fs', 'typert']
 
   private readonly fs: FsLike
   private readonly sandboxPolicy: SandboxPolicyLike | undefined
@@ -103,6 +104,39 @@ export class FileLensService extends TypertRemoteService {
     super(ctx, 'filelens')
     this.fs = ctx.get('fs') as FsLike
     this.sandboxPolicy = ctx.get('sandboxPolicy') as SandboxPolicyLike | undefined
+    // Register the strict invocation definitions into the Host Typert registry
+    // (typert.local). This deliberately does NOT rely on the @Remote decorator
+    // markers: those live in a module-private WeakMap inside the typert-protocol
+    // package, so an out-of-tree bundle resolving a different copy of the
+    // package would split the marker table and the gateway would never see the
+    // endpoints. Runtime registration is instance-agnostic and works for any
+    // install shape (npm / git / tarball).
+    const invocations = (['root', 'list', 'search', 'grep', 'read', 'readMore', 'readHex', 'write', 'readImage'] as const)
+      .map((method): InvocationDescriptor => ({
+        id: 'dsh-filelens#filelens/' + method,
+        service: 'filelens',
+        namespace: 'filelens',
+        method,
+        invocation: { kind: 'direct' },
+        parameters: [{
+          name: 'args',
+          wire: 'args',
+          source: 'json',
+          codec: { mode: 'src-json' },
+        }],
+        result: { mode: 'src-json' },
+      }))
+    // register() is a public method on the TypertRegistry service class; the
+    // minimal TypertRegistryContract interface intentionally omits it, so the
+    // call goes through a narrow structural assertion.
+    const typert = ctx.typert as unknown as { register(contribution: unknown): unknown }
+    typert.register({
+      package: 'dsh-filelens',
+      face: 'host',
+      schemas: [],
+      model: { services: [], events: [], objects: [] },
+      invocations,
+    })
   }
 
   // ---- containment ----
@@ -230,12 +264,10 @@ export class FileLensService extends TypertRemoteService {
 
   // ---- Remote methods ----
 
-  @Remote('root')
   async root(_args: unknown): Promise<{ root: string | null }> {
     return { root: this.defaultRoot() }
   }
 
-  @Remote('list')
   async list(args: { path?: string; root?: string | null }): Promise<FileLensWire> {
     const a = args && typeof args === 'object' ? args : {}
     if (typeof a.path !== 'string' || !a.path) {
@@ -252,7 +284,6 @@ export class FileLensService extends TypertRemoteService {
     }
   }
 
-  @Remote('search')
   async search(args: { root?: string | null; query?: string | null; family?: string | null }): Promise<FileLensWire> {
     const a = args && typeof args === 'object' ? args : {}
     const root = typeof a.root === 'string' && a.root ? a.root : null
@@ -314,7 +345,6 @@ export class FileLensService extends TypertRemoteService {
     }
   }
 
-  @Remote('grep')
   async grep(args: { root?: string | null; query?: string | null; family?: string | null }): Promise<FileLensWire> {
     const a = args && typeof args === 'object' ? args : {}
     const root = typeof a.root === 'string' && a.root ? a.root : null
@@ -401,7 +431,6 @@ export class FileLensService extends TypertRemoteService {
     }
   }
 
-  @Remote('read')
   async read(args: { path?: string; root?: string | null }): Promise<FileLensWire> {
     const a = args && typeof args === 'object' ? args : {}
     if (typeof a.path !== 'string' || !a.path) {
@@ -428,7 +457,6 @@ export class FileLensService extends TypertRemoteService {
     }
   }
 
-  @Remote('readMore')
   async readMore(args: { path?: string; root?: string | null; offset?: number | null }): Promise<FileLensWire> {
     const a = args && typeof args === 'object' ? args : {}
     if (typeof a.path !== 'string' || !a.path) {
@@ -468,7 +496,6 @@ export class FileLensService extends TypertRemoteService {
     }
   }
 
-  @Remote('readHex')
   async readHex(args: { path?: string; root?: string | null }): Promise<FileLensWire> {
     const a = args && typeof args === 'object' ? args : {}
     if (typeof a.path !== 'string' || !a.path) {
@@ -491,7 +518,6 @@ export class FileLensService extends TypertRemoteService {
     }
   }
 
-  @Remote('write')
   async write(args: { path?: string; root?: string | null; text?: string | null; expectedVersion?: string | null }): Promise<FileLensWire> {
     const a = args && typeof args === 'object' ? args : {}
     if (typeof a.path !== 'string' || !a.path || typeof a.text !== 'string') {
@@ -516,7 +542,6 @@ export class FileLensService extends TypertRemoteService {
     }
   }
 
-  @Remote('readImage')
   async readImage(args: { path?: string; root?: string | null }): Promise<FileLensWire> {
     const a = args && typeof args === 'object' ? args : {}
     if (typeof a.path !== 'string' || !a.path) {

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.0 (rev 2) — 2026-08-14
+
+Fix: the Host half no longer relies on the `@Remote` decorator markers for
+gateway discovery. Those markers live in a module-private WeakMap inside the
+typert-protocol package, so an out-of-tree bundle resolving a different copy
+of the package (typical for npm/git/tarball installs) split the marker table
+and the gateway never saw the `filelens/*` endpoints — the UI opened but
+showed no files. The service now registers its strict invocation definitions
+at runtime through `ctx.typert.register()`, which is install-shape agnostic.
+
 ## 1.0.0 — 2026-08-14
 
 Initial bundle release. Static Host/Client plugin packaged as an installable
