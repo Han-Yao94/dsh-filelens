@@ -20,6 +20,22 @@ dsh plugin --profile <name> add github:Han-Yao94/dsh-filelens
 dsh plugin --profile <name> add ./dsh-filelens-1.0.0.tgz
 ```
 
+> **Git installs and build scripts**: the package ships a `prepare` script that
+> builds `lib/` from source, and the `lib/` artifacts are committed as well, so
+> a clone works either way. pnpm ≥10 refuses to run a git dependency's
+> `prepare` script until it is explicitly allowed — if the first `add` fails,
+> copy the exact package key pnpm printed into the profile's
+> `pnpm-workspace.yaml` and re-run:
+>
+> ```yaml
+> allowBuilds:
+>   dsh-filelens: true
+> ```
+>
+> That allowance executes the package's build code on your machine at install
+> time; only allow packages whose source you trust, and prefer pinning a
+> commit: `github:Han-Yao94/dsh-filelens#<sha>`.
+
 If the profile does not exist yet, the first `add` initializes it with
 `@deepseek-ai/dsh-base`; the web GUI additionally needs `dsh-web-app`:
 
