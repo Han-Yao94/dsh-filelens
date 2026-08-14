@@ -1191,6 +1191,9 @@ export async function apply(ctx) {
         // A refresh must NOT close the user's open tabs.
         React.useEffect(() => {
           if (!root) return
+          // self-heal: a root chosen while file.root had reported none must
+          // leave the '未选择目录' view
+          setRootState((s) => (s === 'none' ? 'ready' : s))
           setDirs({ [root]: { state: 'loading' } })
           setExpanded((e) => ({ ...e, [root]: true }))
           callRemote('file.list', { path: root, root }).then((res) => {
@@ -1468,9 +1471,11 @@ export async function apply(ctx) {
           if (!workspaces) return
           try {
             const picked = await workspaces.pickDirectory()
-            if (picked && picked !== root) {
+            if (picked) {
               setRoot(picked)
-              setSeq((s) => s + 1)
+              // the '未选择目录' view must leave once a root exists
+              setRootState('ready')
+              if (picked !== root) setSeq((s) => s + 1)
             }
           } catch (err) {
             showNotice('选择目录失败：' + ((err && err.message) || String(err)), 'error')
