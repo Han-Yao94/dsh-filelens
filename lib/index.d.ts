@@ -33,7 +33,9 @@ export declare class FileLensService extends TypertRemoteService {
     private sessionCwd;
     private defaultRoot;
     private toPlain;
-    root(_args: unknown): Promise<{
+    root(args: {
+        sessionId?: string | null;
+    }): Promise<{
         root: string | null;
     }>;
     list(args: {

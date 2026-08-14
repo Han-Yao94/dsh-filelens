@@ -264,7 +264,18 @@ export class FileLensService extends TypertRemoteService {
 
   // ---- Remote methods ----
 
-  async root(_args: unknown): Promise<{ root: string | null }> {
+  async root(args: { sessionId?: string | null }): Promise<{ root: string | null }> {
+    // When the browser tells us which session this details column belongs to,
+    // resolve THAT session's workspace; falling back to the generic scan.
+    const a = args && typeof args === 'object' ? args : {}
+    if (typeof a.sessionId === 'string' && a.sessionId) {
+      try {
+        const sessions = this.ctx.get('sessions') as { get?: (id: string) => { header?: { cwd?: string } } | undefined } | undefined
+        const session = sessions && typeof sessions.get === 'function' ? sessions.get(a.sessionId) : undefined
+        const cwd = session && session.header && session.header.cwd
+        if (typeof cwd === 'string' && cwd) return { root: cwd }
+      } catch { /* ignore */ }
+    }
     return { root: this.defaultRoot() }
   }
 

@@ -1059,8 +1059,13 @@ export async function apply(ctx) {
 
     // ---- the FileLens panel (details column, real column layout) ----
     ctx.effect(() => slots.inject('details', () =>
-      slots.register({ name: 'details', priority: -1 }, () => {
+      slots.register({ name: 'details', priority: -1 }, (props) => {
         const KEY = 'dsh-filex-state'
+        // framework-standard prop for the 'session' scope: identifies the
+        // session this details instance belongs to; the framework remounts
+        // the occupant per session (key=sessionId), so switching workspaces
+        // naturally re-roots the panel to the new session's workspace.
+        const sessionId = props && typeof props.sessionId === 'string' ? props.sessionId : null
         const [root, setRoot] = React.useState(null)
         const [rootState, setRootState] = React.useState('loading')
         const [dirs, setDirs] = React.useState({})
@@ -1100,7 +1105,9 @@ export async function apply(ctx) {
 
         React.useEffect(() => {
           let alive = true
-          callRemote('file.root', {}).then((res) => {
+          // ask for the CURRENT session's workspace: the host resolves the
+          // session id to its cwd when provided
+          callRemote('file.root', { sessionId }).then((res) => {
             if (!alive) return
             const r = res && typeof res.root === 'string' ? res.root : null
             setRoot(r)
