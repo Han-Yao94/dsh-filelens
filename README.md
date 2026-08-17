@@ -23,7 +23,9 @@ A single npm package ships both halves:
 
 - **Lazy directory tree** — expand/collapse, hidden-dotfile toggle, breadcrumb
   navigation, drag-resizable column, and **every entry is shown** (no per
-  directory cap). Refresh keeps your open tabs.
+  directory cap). Refresh keeps your open tabs. The tree and open previews
+  **auto-sync with the disk** (~2.5 s poll): added/removed entries appear and
+  disappear, and previews reload when file content changes.
 - **Multi-tab preview** — drag-sortable tabs, `Ctrl+Tab` / `Ctrl+Shift+Tab`
   cycling; per-tab "pretty/raw" and word-wrap preferences.
 - **Typed rendering**

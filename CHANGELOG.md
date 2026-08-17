@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.1 (rev 1) — 2026-08-17
+
+Fix: the right-column FileLens panel now stays in sync with the disk in real
+time instead of only refreshing on the manual refresh button or a re-expand.
+
+- Auto-refresh poll (every 2.5 s, timer service with `setInterval` fallback):
+  - every expanded directory is re-listed and the tree updates silently when
+    files/folders are added or removed (diffed against the previous listing,
+    no flicker);
+  - every open preview tab is stat-probed; the content is reloaded only when
+    the on-disk version token changed (no bandwidth waste, no scroll reset
+    churn), including image and hex tabs;
+  - a file deleted while its preview is open is marked as such instead of
+    showing stale content forever; a deleted explorer root drops back to the
+    "未选择目录" view.
+- Re-expanding a previously loaded folder now always re-lists it, so folders
+  collapsed during the change are fresh when reopened.
+- Host: new lightweight `filelens/stat` remote method (type/size/version
+  without reading content); `readHex` / `readImage` now return the same
+  `version` token so their tabs can be auto-reloaded too.
+
 ## 1.0.0 (rev 2) — 2026-08-14
 
 Fix: the Host half no longer relies on the `@Remote` decorator markers for

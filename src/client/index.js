@@ -105,6 +105,9 @@ export async function apply(ctx) {
     const VIRTUAL_THRESHOLD = 800
     const TABLE_SLICE = 1000
     const PREVIEW_KB = 256
+    // Auto-refresh cadence: expanded directories are re-listed and open tabs
+    // are stat-probed (content reloaded only when the disk version changed).
+    const REFRESH_MS = 2500
 
     // Escape a path for use inside a CSS attribute selector string. Raw
     // backslashes/quotes in a selector string are CSS escapes, so a Windows
@@ -1092,6 +1095,10 @@ export async function apply(ctx) {
         const [seq, setSeq] = React.useState(0)
         const [notice, setNotice] = React.useState(null)
         const noticeTimer = React.useRef(null)
+        // Live-state mirror for the background auto-refresh poll: the interval
+        // effect reads the freshest values without re-subscribing on every change.
+        const latest = React.useRef(null)
+        latest.current = { root, rootState, dirs, expanded, tabs, active, query }
         // Transient feedback for save/load/other failures (M2): failures are
         // never silent, successes confirm. Auto-dismisses after 3.5s.
         const showNotice = (text, kind) => {
@@ -1224,6 +1231,77 @@ export async function apply(ctx) {
           })
         }, [root, seq])
 
+        // ---- auto-refresh: keep the tree and open previews in sync with the disk ----
+        // Every REFRESH_MS the panel re-lists every expanded directory and
+        // stat-probes every ready tab; listings and previews update silently
+        // when files are added, removed, or their content changes on disk.
+        React.useEffect(() => {
+          if (!root || rootState !== 'ready') return
+          const tick = () => {
+            const s = latest.current
+            if (!s.root || s.rootState !== 'ready') return
+            const searching = typeof s.query === 'string' && !!s.query.trim()
+            // (a) re-list expanded directories (skip while a search covers the tree)
+            if (!searching) {
+              Object.keys(s.dirs).forEach((p) => {
+                const info = s.dirs[p]
+                if (!info || info.state !== 'ready' || !s.expanded[p]) return
+                callRemote('file.list', { path: p, root: s.root }).then((res) => {
+                  if (p === s.root && res && !res.ok && res.kind === 'missing') {
+                    // the explorer root itself disappeared: leave the tree view
+                    setRootState((st) => (st === 'ready' ? 'none' : st))
+                    return
+                  }
+                  setDirs((d) => {
+                    const cur = d[p]
+                    if (!cur || cur.state !== 'ready') return d
+                    if (!res || !res.ok) return d
+                    const e = res.entries || []
+                    if (cur.entries.length === e.length && cur.entries.every((x, i) => e[i] && x.name === e[i].name && x.type === e[i].type && x.size === e[i].size)) return d
+                    return { ...d, [p]: { state: 'ready', entries: e } }
+                  })
+                }).catch(() => {})
+              })
+            }
+            // (b) stat open tabs: reload only when the disk version changed,
+            // mark deleted files instead of showing stale content forever
+            s.tabs.forEach((t) => {
+              if (!t.content || t.content.state !== 'ready' || t.editing) return
+              // link-opened tabs may live outside the explorer root: probe
+              // without a root, exactly like their original read did
+              const args = t.fromLink ? { path: t.path } : { path: t.path, root: s.root }
+              callRemote('file.stat', args).then((res) => {
+                const cur = latest.current.tabs.find((x) => x.path === t.path)
+                if (!cur || !cur.content || cur.content.state !== 'ready' || cur.editing) return
+                if (!res || !res.ok) {
+                  if (res && (res.kind === 'missing' || res.kind === 'not-file')) {
+                    setTabs((ts) => ts.map((x) =>
+                      x.path === t.path && x.content && x.content.state === 'ready' && !x.editing
+                        ? Object.assign({}, x, { content: Object.assign({}, x.content, { state: 'error', kind: res.kind, message: '文件已被删除或移动' }) })
+                        : x,
+                    ))
+                  }
+                  return
+                }
+                if (res.type !== 'file' || typeof res.version !== 'string' || !res.version) return
+                if (res.version === cur.content.version) return
+                // content changed on disk -> reload this preview (race-guarded
+                // by fetchContent's content.id check)
+                fetchContentRef.current(cur, !!cur.fromLink)
+              }).catch(() => {})
+            })
+          }
+          if (timer) {
+            const d = timer.interval(tick, REFRESH_MS)
+            return () => d()
+          }
+          if (typeof window !== 'undefined' && typeof window.setInterval === 'function') {
+            const id = window.setInterval(tick, REFRESH_MS)
+            return () => window.clearInterval(id)
+          }
+          return undefined
+        }, [root, rootState, timer])
+
         // back-to-tree exit animation
         React.useEffect(() => {
           if (!leaving) return
@@ -1348,20 +1426,30 @@ export async function apply(ctx) {
         const toggleDir = (path) => {
           const next = !expanded[path]
           setExpanded((e) => ({ ...e, [path]: next }))
-          if (next && !dirs[path]) {
-            setDirs((d) => ({ ...d, [path]: { state: 'loading' } }))
+          if (next) {
+            // Always re-list on expand: the on-disk content may have changed
+            // while the folder was collapsed. Existing entries stay visible
+            // while the fresh listing loads; the diff keeps renders quiet.
+            if (!dirs[path]) setDirs((d) => ({ ...d, [path]: { state: 'loading' } }))
             callRemote('file.list', { path, root }).then((res) => {
-              setDirs((d) => ({
-                ...d,
-                [path]: res && res.ok
-                  ? { state: 'ready', entries: res.entries }
-                  : { state: 'error', error: (res && (res.error || res.message)) || 'list failed' },
-              }))
+              setDirs((d) => {
+                const cur = d[path]
+                if (!cur || cur.state === 'loading') {
+                  return { ...d, [path]: res && res.ok
+                    ? { state: 'ready', entries: res.entries }
+                    : { state: 'error', error: (res && (res.error || res.message)) || 'list failed' } }
+                }
+                if (!res || !res.ok) return d
+                const e = res.entries || []
+                if (cur.entries && cur.entries.length === e.length && cur.entries.every((x, i) => e[i] && x.name === e[i].name && x.type === e[i].type && x.size === e[i].size)) return d
+                return { ...d, [path]: { state: 'ready', entries: e } }
+              })
             }).catch((err) => {
-              setDirs((d) => ({
-                ...d,
-                [path]: { state: 'error', error: (err && err.message) || String(err) },
-              }))
+              setDirs((d) => {
+                const cur = d[path]
+                if (cur && cur.state === 'ready' && cur.entries && cur.entries.length) return d
+                return { ...d, [path]: { state: 'error', error: (err && err.message) || String(err) } }
+              })
             })
           }
         }
@@ -1397,6 +1485,11 @@ export async function apply(ctx) {
             ))
           })
         }
+
+        // Keep the latest fetchContent (it closes over the current root) reachable
+        // from the auto-refresh interval without re-subscribing on each render.
+        const fetchContentRef = React.useRef(fetchContent)
+        fetchContentRef.current = fetchContent
 
         const openFile = (path, name, fromLink, line) => {
           setLeaving(false)

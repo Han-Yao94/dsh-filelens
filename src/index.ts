@@ -111,7 +111,7 @@ export class FileLensService extends TypertRemoteService {
     // package would split the marker table and the gateway would never see the
     // endpoints. Runtime registration is instance-agnostic and works for any
     // install shape (npm / git / tarball).
-    const invocations = (['root', 'list', 'search', 'grep', 'read', 'readMore', 'readHex', 'write', 'readImage'] as const)
+    const invocations = (['root', 'list', 'stat', 'search', 'grep', 'read', 'readMore', 'readHex', 'write', 'readImage'] as const)
       .map((method): InvocationDescriptor => ({
         id: 'dsh-filelens#filelens/' + method,
         service: 'filelens',
@@ -290,6 +290,33 @@ export class FileLensService extends TypertRemoteService {
       await this.guard(root, target)
       const entries = await this.fs.listDir(target)
       return { ok: true, path: a.path, entries: this.toPlain(entries) }
+    } catch (err) {
+      return this.fail(err)
+    }
+  }
+
+  async stat(args: { path?: string; root?: string | null }): Promise<FileLensWire> {
+    // Lightweight existence/version probe for the client auto-refresh poll:
+    // returns type/size/version without reading any content. The version
+    // token is the same one `read`/`readHex`/`readImage` return, so the client
+    // can detect "content changed on disk" and reload only then.
+    const a = args && typeof args === 'object' ? args : {}
+    if (typeof a.path !== 'string' || !a.path) {
+      return { ok: false, kind: 'error', message: 'missing path' }
+    }
+    const root = typeof a.root === 'string' && a.root ? a.root : null
+    try {
+      const target = await this.fs.resolve(a.path)
+      await this.guard(root, target)
+      const info = await this.fs.stat(target)
+      if (!info) return { ok: false, kind: 'missing', message: 'file not found' }
+      return {
+        ok: true,
+        path: a.path,
+        type: info.type,
+        size: typeof info.size === 'number' ? info.size : null,
+        version: info.version,
+      }
     } catch (err) {
       return this.fail(err)
     }
@@ -523,7 +550,7 @@ export class FileLensService extends TypertRemoteService {
       if (size !== null && size > this.MAX_HEX) return { ok: false, kind: 'too-large', message: 'binary larger than 256KB' }
       const bytes = await this.fs.readBytes(target, undefined, size || this.MAX_HEX)
       const truncated = size !== null ? size > bytes.length : bytes.length >= this.MAX_HEX
-      return { ok: true, bytes: Array.from(bytes), size, truncated }
+      return { ok: true, bytes: Array.from(bytes), size, truncated, version: info.version }
     } catch (err) {
       return this.fail(err)
     }
@@ -574,7 +601,7 @@ export class FileLensService extends TypertRemoteService {
       }
       const ext = (a.path.match(/\.([^.]+)$/) || [, ''])[1].toLowerCase()
       const mime = MIME[ext] || 'application/octet-stream'
-      return { ok: true, dataUrl: 'data:' + mime + ';base64,' + btoa(bin), size }
+      return { ok: true, dataUrl: 'data:' + mime + ';base64,' + btoa(bin), size, version: info.version }
     } catch (err) {
       return this.fail(err)
     }

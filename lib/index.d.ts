@@ -42,6 +42,10 @@ export declare class FileLensService extends TypertRemoteService {
         path?: string;
         root?: string | null;
     }): Promise<FileLensWire>;
+    stat(args: {
+        path?: string;
+        root?: string | null;
+    }): Promise<FileLensWire>;
     search(args: {
         root?: string | null;
         query?: string | null;
